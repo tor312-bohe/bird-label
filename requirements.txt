@@ -5,6 +5,7 @@ sqlite-utils
 pypinyin
 python-dotenv
 requests
+gunicorn
 
 # AI/ML dependencies for bird recognition
 transformers>=4.21.0

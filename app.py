@@ -2987,12 +2987,15 @@ def resource_file(filename):
 init_database()
 
 if __name__ == "__main__":
-    print("🐦 启动鸟类标注分享工具...")
-    print("📱 访问 http://127.0.0.1:8000 开始使用")
+    print("🐦 启动鸟类标注分享工具 (本地开发模式)...")
+    port = int(os.environ.get("PORT", 8000))
+    host = os.environ.get("HOST", "0.0.0.0")
+    print(f"📱 访问 http://127.0.0.1:{port} 开始使用")
     print("🔍 支持搜索功能，数据库已包含常见鸟类")
+    print("🌐 部署到生产环境时请使用 gunicorn (见 wsgi.py)")
     print("\n按 Ctrl+C 停止服务器")
-    
     try:
-        app.run(debug=True, host='127.0.0.1', port=8000)
+        # debug 仅本地使用；Azure 使用 gunicorn 启动 wsgi:app
+        app.run(debug=True, host=host, port=port)
     except KeyboardInterrupt:
         print("\n👋 服务器已停止")
