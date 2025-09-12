@@ -2983,6 +2983,11 @@ def resource_file(filename):
         return send_file(file_path, mimetype='image/svg+xml')
     return "File not found", 404
 
+@app.route('/healthz')
+def healthz():
+    """Simple health check endpoint for Azure/App Service probes."""
+    return jsonify(status="ok"), 200
+
 # Initialize database when the app starts
 init_database()
 
