@@ -1,0 +1,9 @@
+# Minimal dependencies for cloud deployment (no heavy ML frameworks)
+flask
+pillow
+pydantic
+sqlite-utils
+pypinyin
+python-dotenv
+requests
+gunicorn
