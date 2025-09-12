@@ -1,0 +1,21 @@
+flask
+pillow
+pydantic
+sqlite-utils
+pypinyin
+python-dotenv
+requests
+
+# AI/ML dependencies for bird recognition
+transformers>=4.21.0
+torch>=1.12.0
+torchvision>=0.13.0
+ultralytics>=8.0.0
+scipy
+numpy
+pandas
+
+# TensorFlow/Keras for Bird Watch model integration
+tensorflow>=2.8.0
+keras
+h5py
