@@ -149,6 +149,15 @@ fonts/*
 temp/
 *.tmp
 
+# Large model files (download separately if needed)
+*.h5
+*.hdf5
+*.pkl
+*.joblib
+*.bin
+*.npy
+*.npz
+
 # IDE
 .vscode/
 .idea/
