@@ -2468,7 +2468,7 @@ def index():
                         `;
                     }
                     
-                    resultHTML += `</div>`;                    nslookup birdlabelapp-asuabdlwuzg5c8em.japanwest-01.azurewebsites.net
+                    resultHTML += `</div>`;
                 }
                 
                 recognitionContent.innerHTML = resultHTML;
