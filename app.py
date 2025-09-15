@@ -1,7 +1,7 @@
 from flask import Flask, request, send_file, jsonify
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
-import os, sqlite3, requests, base64, io
+import os, sqlite3, requests, base64, io, re, random
 import json
 
 # Load environment variables from .env file
@@ -2468,7 +2468,7 @@ def index():
                         `;
                     }
                     
-                    resultHTML += `</div>`;
+                    resultHTML += `</div>`;                    nslookup birdlabelapp-asuabdlwuzg5c8em.japanwest-01.azurewebsites.net
                 }
                 
                 recognitionContent.innerHTML = resultHTML;
