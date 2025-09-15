@@ -1,0 +1,14 @@
+# Azure deployment configuration
+# This file helps Azure understand how to deploy the Flask application
+
+# Build configuration
+[build]
+  command = "pip install -r requirements.txt"
+
+# Runtime configuration  
+[runtime]
+  python_version = "3.11"
+
+# Startup configuration
+[startup]
+  command = "./startup.sh"
