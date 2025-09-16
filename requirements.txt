@@ -7,9 +7,6 @@ python-dotenv==1.0.0
 # Image processing
 pillow==10.0.1
 
-# Database
-sqlite-utils==3.35.1
-
 # HTTP requests
 requests==2.31.0
 
