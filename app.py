@@ -1702,6 +1702,11 @@ def index():
             margin-bottom: 1rem;
         }
         
+        .search-input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        
         .form-label {
             color: white;
             font-size: 0.9rem;
@@ -1711,13 +1716,41 @@ def index():
         
         .form-input {
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.75rem 3rem 0.75rem 0.75rem; /* Add right padding for search button */
             border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 8px;
             background: rgba(255, 255, 255, 0.1);
             color: white;
             font-size: 1rem;
             transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        .search-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .search-btn:hover {
+            color: rgba(255, 255, 255, 1);
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .search-btn svg {
+            width: 20px;
+            height: 20px;
         }
         
         .form-input::placeholder {
@@ -1992,12 +2025,24 @@ def index():
         <div id="searchMode" style="display: none;">
             <div class="search-container">
                 <label class="form-label" for="search">Search Bird Species</label>
-                <input type="text" id="search" class="form-input" placeholder="Enter Chinese name, pinyin, or Latin name..." autocomplete="off">
+                <div class="search-input-wrapper">
+                    <input type="text" id="search" class="form-input" placeholder="Enter Chinese name, pinyin, or Latin name..." autocomplete="off">
+                    <button type="button" class="search-btn" id="searchBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </button>
+                </div>
                 <div class="search-results" id="searchResults"></div>
             </div>
-            <button type="button" id="backToUploadBtn" class="recognize-btn secondary" style="margin-top: 2rem;">
-                Back to Upload
-            </button>
+            
+            <!-- Back to Home link styled like "Upload Another Image" -->
+            <div style="text-align: center; margin-top: 2rem;">
+                <a href="javascript:void(0)" id="backToHomeBtn" style="color: rgba(255,255,255,0.8); text-decoration: underline; cursor: pointer; font-size: 0.9rem;">
+                    Back to Home
+                </a>
+            </div>
         </div>
         
         <div class="supported-formats" id="supportedFormats">
@@ -2021,7 +2066,8 @@ def index():
     
     // Mode switching elements
     const searchModeBtn = document.getElementById('searchModeBtn');
-    const backToUploadBtn = document.getElementById('backToUploadBtn');
+    const backToHomeBtn = document.getElementById('backToHomeBtn');
+    const searchBtn = document.getElementById('searchBtn');
     const uploadMode = document.getElementById('uploadMode');
     const searchMode = document.getElementById('searchMode');
     const mainButtons = document.getElementById('mainButtons');
@@ -2097,7 +2143,25 @@ def index():
     }
     
     searchModeBtn.addEventListener('click', switchToSearchMode);
-    backToUploadBtn.addEventListener('click', switchToUploadMode);
+    backToHomeBtn.addEventListener('click', switchToUploadMode);
+    
+    // Search button functionality
+    searchBtn.addEventListener('click', function() {
+        const query = searchInput.value.trim();
+        if (query) {
+            performSearch(query);
+        }
+    });
+    
+    // Enter key functionality for search
+    searchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            const query = searchInput.value.trim();
+            if (query) {
+                performSearch(query);
+            }
+        }
+    });
     
     // Upload another image functionality
     if (uploadAnotherBtn) {
@@ -2576,6 +2640,42 @@ def index():
     });
 
     // Search functionality
+    function performSearch(query) {
+        if (!query || query.length < 1) {
+            searchResults.style.display = 'none';
+            return;
+        }
+        
+        fetch('/api/search?q=' + encodeURIComponent(query))
+            .then(response => response.json())
+            .then(data => {
+                searchResults.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'search-item';
+                        div.innerHTML = '<div><strong>' + item.chinese_name + '</strong></div><div class="latin-name">' + item.latin_name + '</div>';
+                        div.addEventListener('click', () => {
+                            cnInput.value = item.chinese_name;
+                            laInput.value = item.latin_name;
+                            searchInput.value = item.chinese_name;
+                            searchResults.style.display = 'none';
+                        });
+                        searchResults.appendChild(div);
+                    });
+                    searchResults.style.display = 'block';
+                } else {
+                    searchResults.innerHTML = '<div class="no-results">No birds found matching "' + query + '"</div>';
+                    searchResults.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                searchResults.innerHTML = '<div class="no-results">Search error occurred</div>';
+                searchResults.style.display = 'block';
+            });
+    }
+    
     searchInput.addEventListener('input', function() {
         clearTimeout(searchTimeout);
         const query = this.value.trim();
@@ -2586,33 +2686,7 @@ def index():
         }
         
         searchTimeout = setTimeout(() => {
-            fetch('/api/search?q=' + encodeURIComponent(query))
-                .then(response => response.json())
-                .then(data => {
-                    searchResults.innerHTML = '';
-                    if (data.length > 0) {
-                        data.forEach(item => {
-                            const div = document.createElement('div');
-                            div.className = 'search-item';
-                            div.innerHTML = '<div><strong>' + item.chinese_name + '</strong></div><div class="latin-name">' + item.latin_name + '</div>';
-                            div.addEventListener('click', () => {
-                                cnInput.value = item.chinese_name;
-                                laInput.value = item.latin_name;
-                                searchInput.value = item.chinese_name;
-                                searchResults.style.display = 'none';
-                            });
-                            searchResults.appendChild(div);
-                        });
-                        searchResults.style.display = 'block';
-                    } else {
-                        searchResults.innerHTML = '<div class="search-item">No matching birds found</div>';
-                        searchResults.style.display = 'block';
-                    }
-                })
-                .catch(error => {
-                    console.error('Search error:', error);
-                    searchResults.style.display = 'none';
-                });
+            performSearch(query);
         }, 300);
     });
 
