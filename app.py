@@ -1532,9 +1532,10 @@ def index():
             background-attachment: fixed;
             min-height: 100vh;
             display: flex;
-            align-items: center;
+            align-items: flex-start; /* Changed from center to flex-start */
             justify-content: center;
             position: relative;
+            padding-top: 5vh; /* Position content even higher - moved up 40% total from original center */
         }
         
         body::before {
@@ -1553,8 +1554,8 @@ def index():
             z-index: 2;
             max-width: 500px;
             width: 90%;
-            margin: 2rem auto 0 auto; /* Push UI up a little */
-            padding: 1.5rem 2rem; /* Reduce top/bottom padding */
+            margin: 0 auto; /* Remove top margin since body now handles positioning */
+            padding: 1.5rem 2rem;
         }
         
         .header {
