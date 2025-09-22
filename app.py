@@ -742,107 +742,88 @@ def recognize_bird_birdwatch(image_path, location=None):
         print(f"❌ Bird Watch recognition error: {e}")
         return None
 
-def compress_image_for_api(image_path, target_size_mb=1.8):
+def compress_image_for_api(image_path, target_size_mb=1.5):
     """Compress image below target_size_mb returning path or None.
-
-    Strategy:
-    1. Try multiple downscale factors (progressively smaller).
-    2. For each size try descending quality levels.
-    3. Stop immediately when size <= target.
-    4. If target not met, return smallest produced image (best effort) if it is smaller than original; else None.
-
+    
+    Optimized for HHOLOVE API requirements:
+    - Max file size: 2MB (we target 1.5MB for safety)
+    - Preferred format: JPEG
+    - Reasonable dimensions (max 1024px)
+    
     Returns: path to compressed JPEG (temp file) OR None on failure.
-    Caller is responsible for deleting the returned temp file when done.
     """
-    import tempfile, os
+    import tempfile
+    import os
     from PIL import Image
 
     try:
         original_bytes = os.path.getsize(image_path)
         original_mb = original_bytes / (1024 * 1024)
-        print(f"🔧 [Compress] Original size: {original_mb:.2f}MB | Target: {target_size_mb:.2f}MB")
+        print(f"🔧 [Compress] Original: {original_mb:.2f}MB → Target: {target_size_mb:.2f}MB")
 
         # Fast path: already under target
         if original_mb <= target_size_mb:
             print("✅ [Compress] No compression needed")
-            return image_path  # Return original path (caller must not delete)
+            return image_path
 
-        # Create temp destination
+        # Create temp file
         fd, temp_path = tempfile.mkstemp(suffix=".jpg")
         os.close(fd)
 
         with Image.open(image_path) as img:
-            # Normalize mode
-            if img.mode not in ("RGB", "L"):
-                # Convert keeping visual appearance (flatten alpha onto white)
-                if img.mode in ("RGBA", "LA", "P"):
-                    base = Image.new("RGB", img.size, (255, 255, 255))
-                    if img.mode == "P":
-                        img = img.convert("RGBA")
-                    alpha = img.split()[-1] if img.mode in ("RGBA", "LA") else None
-                    base.paste(img, mask=alpha)
-                    img = base
+            print(f"📐 [Compress] Original: {img.size[0]}x{img.size[1]} ({img.mode})")
+            
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # Create white background for transparency
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    if img.mode in ('RGBA', 'LA'):
+                        background.paste(img, mask=img.split()[-1])
+                    img = background
                 else:
-                    img = img.convert("RGB")
+                    img = img.convert('RGB')
 
-            width, height = img.size
-            original_dimensions = f"{width}x{height}"
-            print(f"📐 [Compress] Starting dimensions: {original_dimensions}")
+            # Resize if too large - HHOLOVE works better with smaller images
+            max_dimension = 1024  # Keep images reasonably sized
+            if max(img.size) > max_dimension:
+                ratio = max_dimension / max(img.size)
+                new_width = int(img.size[0] * ratio)
+                new_height = int(img.size[1] * ratio)
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                print(f"📏 [Compress] Resized to: {new_width}x{new_height}")
 
-            # Primary attempts
-            scale_factors = [1.0, 0.85, 0.7, 0.55, 0.4]
-            quality_levels = [85, 75, 65, 55, 50, 45, 40]
-
-            best = {"size_mb": original_mb, "path": None, "quality": None, "scale": 1.0}
-
-            for scale in scale_factors:
-                if scale < 1.0:
-                    new_w = max(64, int(width * scale))
-                    new_h = max(64, int(height * scale))
-                    working = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                    print(f"📏 [Compress] Scale {scale:.2f} → {new_w}x{new_h}")
-                else:
-                    working = img
-
-                for q in quality_levels:
-                    working.save(temp_path, "JPEG", quality=q, optimize=True, progressive=True)
-                    size_mb = os.path.getsize(temp_path) / (1024 * 1024)
-                    print(f"   🎯 scale {scale:.2f} | q{q}: {size_mb:.2f}MB")
-
-                    # Track best (smallest)
-                    if size_mb < best["size_mb"]:
-                        best.update({"size_mb": size_mb, "quality": q, "scale": scale})
-
-                    if size_mb <= target_size_mb:
-                        print(f"✅ [Compress] Success: {original_mb:.2f}MB → {size_mb:.2f}MB | scale {scale:.2f} | q{q}")
-                        return temp_path
-
-            # Fallback aggressive attempt if still large (> target by >15%)
-            if best["size_mb"] > target_size_mb * 1.15:
-                print("⚠️ [Compress] Entering aggressive fallback (strong downscale)")
-                for scale in [0.35, 0.28, 0.22]:
-                    new_w = max(48, int(width * scale))
-                    new_h = max(48, int(height * scale))
-                    working = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                    for q in [50, 45, 40, 35]:
-                        working.save(temp_path, "JPEG", quality=q, optimize=True, progressive=True)
-                        size_mb = os.path.getsize(temp_path) / (1024 * 1024)
-                        print(f"   🛠️ fallback scale {scale:.2f} | q{q}: {size_mb:.2f}MB")
-                        if size_mb < best["size_mb"]:
-                            best.update({"size_mb": size_mb, "quality": q, "scale": scale})
-                        if size_mb <= target_size_mb:
-                            print(f"✅ [Compress] Fallback success: {original_mb:.2f}MB → {size_mb:.2f}MB | scale {scale:.2f} | q{q}")
-                            return temp_path
-
-            if best["path"] is None and os.path.exists(temp_path):
-                # Keep the last written temp_path even if above target (best effort)
-                print(f"⚠️ [Compress] Using best-effort image: {original_mb:.2f}MB → {best['size_mb']:.2f}MB (target {target_size_mb:.2f}MB)")
-                return temp_path if best["size_mb"] < original_mb else None
-
-            return best["path"]
+            # Try different quality levels until we meet target
+            for quality in [85, 75, 65, 55, 50, 45, 40, 35]:
+                img.save(temp_path, 'JPEG', quality=quality, optimize=True)
+                
+                compressed_bytes = os.path.getsize(temp_path)
+                compressed_mb = compressed_bytes / (1024 * 1024)
+                
+                print(f"🎚️ [Compress] Quality {quality}: {compressed_mb:.2f}MB")
+                
+                if compressed_mb <= target_size_mb:
+                    print(f"✅ [Compress] Success: {compressed_mb:.2f}MB at quality {quality}")
+                    return temp_path
+                    
+            # If we still can't meet target, return what we have if it's smaller than original
+            final_mb = os.path.getsize(temp_path) / (1024 * 1024)
+            if final_mb < original_mb:
+                print(f"⚠️ [Compress] Best effort: {final_mb:.2f}MB (still above target)")
+                return temp_path
+            else:
+                print(f"❌ [Compress] Failed to reduce size meaningfully")
+                os.unlink(temp_path)
+                return None
+                
     except Exception as e:
         print(f"❌ [Compress] Error: {e}")
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.unlink(temp_path)
         return None
+
 
 def recognize_bird_hholove(image_path, location=None):
     """
@@ -1425,18 +1406,18 @@ def add_caption(img_path, cn, la, position="bottom_right"):
     text_y_cn = H - total_text_height - bottom_margin
     text_y_la = text_y_cn + h_cn + line_spacing
     
-    # Function to draw white text with subtle shadow and proper transparency
+    # Function to draw white text with bold stroke and soft shadow
     def draw_text_with_soft_shadow(x, y, text, font):
         # Create a separate RGBA image for the text with transparency
         text_img = Image.new('RGBA', img.size, (0, 0, 0, 0))
         text_draw = ImageDraw.Draw(text_img)
         
-        # Draw shadow first
+        # Draw shadow first (reduced opacity for better balance with stroke)
         shadow_offset_x = 0
-        shadow_offset_y = 1  # 1px vertical offset (smaller)
-        base_alpha = int(255 * 0.08)  # 8% opacity (lighter)
+        shadow_offset_y = 2  # Slightly more offset for better visibility with stroke
+        base_alpha = int(255 * 0.12)  # Slightly stronger shadow to balance the stroke
         
-        # Smaller blur radius with better blur simulation
+        # Shadow blur layers
         blur_layers = [
             (0, 1.0),    # Center shadow at full base alpha
             (1, 0.7),    # 1px blur at 70% of base alpha  
@@ -1467,10 +1448,25 @@ def add_caption(img_path, cn, la, position="bottom_right"):
                     except Exception:
                         pass
         
-        # Main text with 75% opacity (192 out of 255)
+        # Draw bold stroke outline (makes text much more prominent and readable)
+        stroke_width = max(2, int(font_cn_size * 0.08))  # Stroke proportional to font size
+        stroke_color = (0, 0, 0, 180)  # Semi-transparent black outline
+        
+        # Draw stroke by drawing text multiple times in a circle around the main position
+        stroke_points = 16  # More points for smoother stroke
+        for i in range(stroke_points):
+            angle = (2 * 3.14159 * i) / stroke_points
+            stroke_x = x + int(stroke_width * 0.7 * (angle / 3.14159))  
+            stroke_y = y + int(stroke_width * 0.7 * ((angle + 1.57) / 3.14159))
+            try:
+                text_draw.text((stroke_x, stroke_y), text, font=font, fill=stroke_color)
+            except Exception:
+                pass
+        
+        # Main text - pure white with full opacity for maximum contrast
         try:
-            text_draw.text((x, y), text, font=font, fill=(255, 255, 255, 192))
-            print(f"✅ Drew text with 75% opacity: {text}")
+            text_draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
+            print(f"✅ Drew bold text with stroke: {text}")
         except Exception as e:
             print(f"Text drawing error: {e}")
         
@@ -1585,7 +1581,7 @@ def index():
         .title {
             color: white;
             font-size: 2rem;
-            font-weight: 600;
+            font-weight: 600; /* Reverted from 700 back to 600 */
             margin-bottom: 0.5rem;
         }
         
@@ -1926,7 +1922,7 @@ def index():
             border: none;
             border-radius: 8px;
             font-size: 1rem;
-            font-weight: 500;
+            font-weight: 500; /* Reverted from 600 back to 500 */
             cursor: pointer;
             transition: all 0.3s ease;
         }
@@ -1971,7 +1967,7 @@ def index():
             border: none;
             border-radius: 8px;
             font-size: 1.1rem;
-            font-weight: 600;
+            font-weight: 600; /* Reverted from 700 back to 600 */
             cursor: pointer;
             transition: all 0.3s ease;
             margin-top: 1rem;
@@ -3482,7 +3478,7 @@ def upload():
         .bird-name-cn {{
             color: white;
             font-size: 1.3rem;
-            font-weight: 600;
+            font-weight: 600; /* Reverted from 700 back to 600 */
             margin-bottom: 0.5rem;
         }}
         
@@ -3504,7 +3500,7 @@ def upload():
             border: none;
             border-radius: 8px;
             font-size: 1rem;
-            font-weight: 600;
+            font-weight: 600; /* Reverted from 700 back to 600 */
             cursor: pointer;
             text-decoration: none;
             display: inline-flex;
